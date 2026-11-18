@@ -17,6 +17,30 @@ jobs:
       - name: Unzip project
         run: unzip -o MiToolLauncher.zip -d launcher
 
+      - name: Use Maven Central mirror (avoids 429 errors)
+        run: |
+          cat > launcher/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
+                  mavenCentral()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "MiToolLauncher"
+          include ':app'
+          EOF
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -31,7 +55,13 @@ jobs:
 
       - name: Build debug APK
         working-directory: launcher
-        run: gradle --no-daemon assembleDebug
+        run: |
+          for i in 1 2 3; do
+            gradle --no-daemon assembleDebug && exit 0
+            echo "Build failed, retrying in 30s ($i/3)"
+            sleep 30
+          done
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
